@@ -1,1 +1,6 @@
 *.json
+*.csv
+*.log
+*.tmp
+__pycache__/
+*.pyc
