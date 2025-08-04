@@ -14,10 +14,10 @@ def identificar_lado_dominante(left_data, right_data):
     def mag_prom(data):
         if not data:
             return 0
-        vectores_validos = [d for d in data if all(k in d for k in ('x', 'y', 'z'))]
+        vectores_validos = [d['accelerometer'] for d in data if 'accelerometer' in d and all(k in d['accelerometer'] for k in ('x', 'y', 'z'))]
         if not vectores_validos:
             return 0
-        return sum((d['x']**2 + d['y']**2 + d['z']**2)**0.5 for d in vectores_validos) / len(vectores_validos)
+        return sum((v['x']**2 + v['y']**2 + v['z']**2)**0.5 for v in vectores_validos) / len(vectores_validos)
 
 
     left_mag = mag_prom(left_data)
