@@ -57,4 +57,4 @@ def visualizar_movimiento_xyz_por_lado(ruta_archivo):
         plt.show()
 
 # Ejecutar
-visualizar_movimiento_xyz_por_lado('./data/tapping/tapping1.json')
+visualizar_movimiento_xyz_por_lado('./data/stomp/stomp5.json')

@@ -8,21 +8,27 @@ def cargar_datos(archivo_json):
         return json.load(f)['imuData']
 
 def filtrar_datos_por_lado(datos, lado_tag):
-    return [d for d in datos if lado_tag in d['deviceId']]
+    """Incluye LEFT-ANKLE, LEFT-KNEE, LEFT-FOOT, etc."""
+    return [
+        d for d in datos
+        if lado_tag in d['deviceId'] and 'BASE-SPINE' not in d['deviceId']
+    ]
+
+def mag_prom_acelerometro(data):
+    """Calcula magnitud promedio usando acelerómetro."""
+    if not data:
+        return 0
+    vectores_validos = [d['accelerometer'] for d in data if 'accelerometer' in d]
+    if not vectores_validos:
+        return 0
+    return sum(
+        (v['x']**2 + v['y']**2 + v['z']**2) ** 0.5
+        for v in vectores_validos
+    ) / len(vectores_validos)
 
 def identificar_lado_dominante(left_data, right_data):
-    def mag_prom(data):
-        if not data:
-            return 0
-        vectores_validos = [d['accelerometer'] for d in data if 'accelerometer' in d and all(k in d['accelerometer'] for k in ('x', 'y', 'z'))]
-        if not vectores_validos:
-            return 0
-        return sum((v['x']**2 + v['y']**2 + v['z']**2)**0.5 for v in vectores_validos) / len(vectores_validos)
-
-
-    left_mag = mag_prom(left_data)
-    right_mag = mag_prom(right_data)
-
+    left_mag = mag_prom_acelerometro(left_data)
+    right_mag = mag_prom_acelerometro(right_data)
     return 'LEFT' if left_mag > right_mag else 'RIGHT'
 
 def calcular_asimetria(val1, val2):
@@ -45,7 +51,7 @@ def procesar_archivo(archivo_json, ejercicio):
     features_pasivo = resumen_de_movimiento(datos_pasivo)
 
     asimetria_mag = calcular_asimetria(features_activo['mag_prom'], features_pasivo['mag_prom'])
-    asimetria_ritmo = calcular_asimetria(features_activo['ritmo_prom'], features_pasivo['ritmo_prom'])
+    asimetria_ritmo = calcular_asimetria(features_activo['tiempo_prom_rep'], features_pasivo['tiempo_prom_rep'])
 
     return {
         'archivo': os.path.basename(archivo_json),
