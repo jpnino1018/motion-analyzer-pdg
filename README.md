@@ -81,3 +81,11 @@ These features lay the groundwork for identifying motor impairments, asymmetries
     "z": -35.4
   }
 }
+
+---
+
+## Documentación ampliada
+
+Para una descripción completa de las variables analizadas, el flujo de adquisición de datos (con diagramas) y los protocolos de captura de ejercicios, consulta el documento:
+
+- `docs/01_variables_y_protocolo.md`

@@ -1,0 +1,9 @@
+graph LR
+  L["Sensor LEFT-ANKLE"] --> S((Muestras LEFT))
+  R["Sensor RIGHT-ANKLE"] --> T((Muestras RIGHT))
+  S --> U["Features lado LEFT"]
+  T --> V["Features lado RIGHT"]
+  U --> W["Asimetrías"]
+  V --> W
+
+

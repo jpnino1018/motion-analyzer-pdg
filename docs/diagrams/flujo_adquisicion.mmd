@@ -1,0 +1,8 @@
+graph TD
+  A["IMU LEFT"] --> C
+  B["IMU RIGHT"] --> C
+  C["JSON con muestras (imuData)"] --> D["Filtrado por lado usando deviceId"]
+  D --> E["Cálculo de magnitud acelerómetro por lado"]
+  E --> F["Identificar Lado Activo"]
+
+
