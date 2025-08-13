@@ -14,21 +14,9 @@ def filtrar_datos_por_lado(datos, lado_tag):
         if lado_tag in d['deviceId'] and 'BASE-SPINE' not in d['deviceId']
     ]
 
-def mag_prom_acelerometro(data):
-    """Calcula magnitud promedio usando acelerómetro."""
-    if not data:
-        return 0
-    vectores_validos = [d['accelerometer'] for d in data if 'accelerometer' in d]
-    if not vectores_validos:
-        return 0
-    return sum(
-        (v['x']**2 + v['y']**2 + v['z']**2) ** 0.5
-        for v in vectores_validos
-    ) / len(vectores_validos)
-
 def identificar_lado_dominante(left_data, right_data):
-    left_mag = mag_prom_acelerometro(left_data)
-    right_mag = mag_prom_acelerometro(right_data)
+    left_mag = resumen_de_movimiento(left_data)['mag_prom']
+    right_mag = resumen_de_movimiento(right_data)['mag_prom']
     return 'LEFT' if left_mag > right_mag else 'RIGHT'
 
 def calcular_asimetria(val1, val2):
@@ -36,7 +24,7 @@ def calcular_asimetria(val1, val2):
         return 0
     return abs(val1 - val2) / max(val1, val2)
 
-def procesar_archivo(archivo_json, ejercicio):
+def procesar_archivo(archivo_json, ejercicio, graficar=True):
     datos = cargar_datos(archivo_json)
     left_data = filtrar_datos_por_lado(datos, 'LEFT')
     right_data = filtrar_datos_por_lado(datos, 'RIGHT')
@@ -62,6 +50,7 @@ def procesar_archivo(archivo_json, ejercicio):
         'asimetria_mag': round(asimetria_mag, 3),
         'asimetria_ritmo': round(asimetria_ritmo, 3)
     }
+
 
 def procesar_todos_los_archivos():
     base_dir = './data'
