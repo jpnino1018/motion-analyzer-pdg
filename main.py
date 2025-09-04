@@ -1,11 +1,9 @@
 import os
-import json
 import csv
+from preprocessing.normalization import cargar_datos_json
 from preprocessing.feature_extraction import resumen_de_movimiento
+from preprocessing.cleaners import recortar_inactividad
 
-def cargar_datos(archivo_json):
-    with open(archivo_json) as f:
-        return json.load(f)['imuData']
 
 def filtrar_datos_por_lado(datos, lado_tag):
     """Incluye LEFT-ANKLE, LEFT-KNEE, LEFT-FOOT, etc."""
@@ -25,15 +23,24 @@ def calcular_asimetria(val1, val2):
     return abs(val1 - val2) / max(val1, val2)
 
 def procesar_archivo(archivo_json, ejercicio, graficar=True):
-    datos = cargar_datos(archivo_json)
-    left_data = filtrar_datos_por_lado(datos, 'LEFT')
-    right_data = filtrar_datos_por_lado(datos, 'RIGHT')
+    datos = cargar_datos_json(archivo_json)
 
+    # Si el normalizador devolvió un dict con LEFT y RIGHT
+    if isinstance(datos, dict) and "LEFT" in datos and "RIGHT" in datos:
+        left_data = recortar_inactividad(datos["LEFT"])
+        right_data = recortar_inactividad(datos["RIGHT"])
+    else:
+        # Compatibilidad con formato viejo (lista plana)
+        datos = recortar_inactividad(datos)
+        left_data = filtrar_datos_por_lado(datos, "LEFT")
+        right_data = filtrar_datos_por_lado(datos, "RIGHT")
+
+    # --- resto de tu lógica igual ---
     lado_activo = identificar_lado_dominante(left_data, right_data)
-    lado_pasivo = 'RIGHT' if lado_activo == 'LEFT' else 'LEFT'
+    lado_pasivo = "RIGHT" if lado_activo == "LEFT" else "LEFT"
 
-    datos_activo = left_data if lado_activo == 'LEFT' else right_data
-    datos_pasivo = right_data if lado_activo == 'LEFT' else left_data
+    datos_activo = left_data if lado_activo == "LEFT" else right_data
+    datos_pasivo = right_data if lado_activo == "LEFT" else left_data
 
     features_activo = resumen_de_movimiento(datos_activo)
     features_pasivo = resumen_de_movimiento(datos_pasivo)
