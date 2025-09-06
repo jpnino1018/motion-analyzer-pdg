@@ -1,0 +1,13 @@
+# Core
+numpy>=1.23
+scipy>=1.9
+pandas>=1.5
+
+# Visualization
+matplotlib>=3.7
+
+# Web app
+streamlit>=1.27
+
+# Optional utils (file handling, plotting)
+seaborn>=0.12
