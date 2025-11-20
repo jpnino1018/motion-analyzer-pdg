@@ -2,13 +2,39 @@ import numpy as np
 from typing import Dict, List, Any
 from src.preprocessing.signal_processing import AccelerometerData, SignalProcessor
 from src.analysis.movement_analysis import MovementAnalyzer, MovementMetrics
+from src.preprocessing.cleaners import recortar_inactividad
 
 class MovementProcessor:
     def __init__(self):
         self.signal_processor = SignalProcessor()
         self.movement_analyzer = MovementAnalyzer()
 
-    def process_movement_data(self, data: List[Dict[str, Any]], n_reps: int = 10) -> MovementMetrics:
+    def process_movement_data(self, data: List[Dict[str, Any]], n_reps: int = 10, 
+                             trim_inactive: bool = True, inactive_threshold: float = 0.5, 
+                             min_active_length: int = 50) -> MovementMetrics:
+        """Process movement data with optional automatic trimming of inactive initial periods.
+        
+        Args:
+            data: List of sensor readings with timestamp, accelerometer, gyroscope
+            n_reps: Expected number of repetitions to detect
+            trim_inactive: If True, automatically remove inactive initial period
+            inactive_threshold: Magnitude threshold (m/s²) to consider movement active
+            min_active_length: Minimum consecutive samples above threshold to confirm activity start
+            
+        Returns:
+            MovementMetrics with extracted features
+        """
+        # Store original length for debugging
+        original_length = len(data)
+        
+        # Trim inactive initial period if requested
+        if trim_inactive and len(data) > 0:
+            data = recortar_inactividad(data, umbral=inactive_threshold, min_len=min_active_length)
+            trimmed_count = original_length - len(data)
+            if trimmed_count > 0:
+                # Store trimming info for debugging (could be exposed via return tuple if needed)
+                self._last_trim_info = {"original": original_length, "trimmed": trimmed_count, "remaining": len(data)}
+        
         # Convert raw data to numpy arrays
         timestamps = np.array([d['timestamp'] for d in data])
         acc_data = self._extract_accelerometer_data(data, timestamps)
@@ -37,14 +63,14 @@ class MovementProcessor:
             return self._get_empty_metrics()
 
         intervals = self.signal_processor.calculate_intervals(timestamps, peaks)
-        vertical_range = self.signal_processor.calculate_vertical_range(acc_data)
 
         # Analyze movement patterns
         return self.movement_analyzer.analyze_movement(
             magnitudes=magnitudes,
             peaks=peaks,
             intervals=intervals,
-            vertical_amplitude=vertical_range
+            z_accel=acc_data.z,
+            timestamps=timestamps
         )
 
     def _extract_accelerometer_data(self, data: List[Dict[str, Any]], timestamps: np.ndarray) -> AccelerometerData:
@@ -69,4 +95,4 @@ class MovementProcessor:
         )
 
     def _get_empty_metrics(self) -> MovementMetrics:
-        return MovementMetrics(0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0)
+        return MovementMetrics(0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0)

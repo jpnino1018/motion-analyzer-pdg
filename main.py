@@ -52,9 +52,9 @@ def process_file(file_path: str, exercise_type: str, visualizer: MovementVisuali
     processor = MovementProcessor()
     data = load_json_data(file_path)
     
-    # Process both sides
-    left_metrics = processor.process_movement_data(data["LEFT"])
-    right_metrics = processor.process_movement_data(data["RIGHT"])
+    # Process both sides (with automatic inactive period trimming enabled by default)
+    left_metrics = processor.process_movement_data(data["LEFT"], trim_inactive=True)
+    right_metrics = processor.process_movement_data(data["RIGHT"], trim_inactive=True)
     
     # Determine active side
     active_side = "LEFT" if left_metrics.magnitude_mean > right_metrics.magnitude_mean else "RIGHT"
