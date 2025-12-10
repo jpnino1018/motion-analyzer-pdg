@@ -324,6 +324,20 @@ st.markdown("""
             align-items: center;
             gap: 15px;
         }
+        
+        /* Hide Streamlit branding and deployment UI */
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+        header {visibility: hidden;}
+        .stDeployButton {display: none;}
+        [data-testid="stToolbar"] {display: none;}
+        .stActionButton {display: none;}
+        div[data-testid="stDecoration"] {display: none;}
+        button[kind="header"] {display: none;}
+        
+        /* Hide GitHub avatar and fork button */
+        [data-testid="stHeader"] {display: none;}
+        iframe[title="st.iframe"] {display: none;}
     </style>
 """, unsafe_allow_html=True)
 
