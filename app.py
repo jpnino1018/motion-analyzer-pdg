@@ -6,6 +6,7 @@ import json
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+import base64
 from src.preprocessing.movement_processor import MovementProcessor
 from src.preprocessing.signal_processing import AccelerometerData
 from src.visualization.movement_visualizer import MovementVisualizer
@@ -16,11 +17,59 @@ plt.style.use('default')
 sns.set_style("whitegrid")
 
 # =========================
+# Helper Functions
+# =========================
+def get_base64_image(image_path):
+    """Convert image to base64 string for embedding in HTML"""
+    try:
+        with open(image_path, "rb") as img_file:
+            return base64.b64encode(img_file.read()).decode()
+    except FileNotFoundError:
+        return None
+
+def validate_json_format(data):
+    """Validate if JSON has the expected format"""
+    if not isinstance(data, dict):
+        return False, "El archivo JSON debe contener un objeto principal."
+    
+    # Check for expected format 1: imuData
+    if "imuData" in data:
+        if not isinstance(data["imuData"], list):
+            return False, "El campo 'imuData' debe ser una lista."
+        if len(data["imuData"]) == 0:
+            return False, "El campo 'imuData' está vacío."
+        # Check first item structure
+        sample = data["imuData"][0]
+        required_fields = ["deviceId", "timestamp", "accelerometer"]
+        missing = [f for f in required_fields if f not in sample]
+        if missing:
+            return False, f"Faltan campos requeridos en imuData: {', '.join(missing)}"
+        return True, None
+    
+    # Check for expected format 2: izquierda/derecha
+    if "izquierda" in data or "derecha" in data:
+        for side in ["izquierda", "derecha"]:
+            if side in data:
+                if not isinstance(data[side], list):
+                    return False, f"El campo '{side}' debe ser una lista."
+                if len(data[side]) == 0:
+                    return False, f"El campo '{side}' está vacío."
+                # Check first item structure
+                sample = data[side][0]
+                required_fields = ["millis", "x", "y", "z"]
+                missing = [f for f in required_fields if f not in sample]
+                if missing:
+                    return False, f"Faltan campos requeridos en {side}: {', '.join(missing)}"
+        return True, None
+    
+    return False, "Formato JSON no reconocido."
+
+# =========================
 # Page Configuration
 # =========================
 st.set_page_config(
-    page_title="Motion Analyzer - Parkinson's Assessment",
-    page_icon="🏥",
+    page_title="Foot Motion Analyzer - i2t",
+    page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -46,22 +95,21 @@ def load_and_process_movement_data(file_path: str, exercise: str, trim_inactive:
                     "gyroscope": d.get("gyroscope", {})
                 })
         elif "izquierda" in data or "derecha" in data:
-            ACC_SCALE = 16384.0
-            GYRO_SCALE = 131.0
+            # Data already comes in g units and °/s, just convert g to m/s²
             for side, raw_key in [("LEFT", "izquierda"), ("RIGHT", "derecha")]:
                 if raw_key in data:
                     for d in data[raw_key]:
                         normalized[side].append({
                             "timestamp": d["millis"],
                             "accelerometer": {
-                                "x": (d["x"] / ACC_SCALE) * 9.81,
-                                "y": (d["y"] / ACC_SCALE) * 9.81,
-                                "z": (d["z"] / ACC_SCALE) * 9.81,
+                                "x": d["x"] * 9.81,  # Already in g, convert to m/s²
+                                "y": d["y"] * 9.81,
+                                "z": d["z"] * 9.81,
                             },
                             "gyroscope": {
-                                "x": d["a"] / GYRO_SCALE,
-                                "y": d["b"] / GYRO_SCALE,
-                                "z": d["g"] / GYRO_SCALE,
+                                "x": d["a"],  # Already in °/s
+                                "y": d["b"],
+                                "z": d["g"],
                             }
                         })
 
@@ -172,13 +220,45 @@ def load_and_process_movement_data(file_path: str, exercise: str, trim_inactive:
 # =========================
 st.markdown("""
     <style>
+        /* Fixed topbar */
+        .fixed-topbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(135deg, #1a4d2e 0%, #0d3321 100%);
+            padding: 1rem 2rem;
+            z-index: 999;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .fixed-topbar h1 {
+            color: white;
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin: 0;
+        }
+        .fixed-topbar p {
+            color: white;
+            font-size: 0.9rem;
+            margin: 0;
+            opacity: 0.9;
+        }
+        
+        /* Add padding to main content to account for fixed topbar */
+        .main .block-container {
+            padding-top: 5rem;
+        }
+        
         /* Main header styling */
         .main-header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #1a4d2e 0%, #0d3321 100%);
             padding: 2rem;
             border-radius: 10px;
             margin-bottom: 2rem;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
         }
         .main-header h1 {
             color: white;
@@ -188,7 +268,7 @@ st.markdown("""
             text-align: center;
         }
         .main-header p {
-            color: rgba(255, 255, 255, 0.9);
+            color: white;
             font-size: 1.1rem;
             text-align: center;
             margin-top: 0.5rem;
@@ -199,12 +279,12 @@ st.markdown("""
             background: white;
             padding: 1.5rem;
             border-radius: 8px;
-            border-left: 4px solid #667eea;
+            border-left: 4px solid #1a4d2e;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
             margin-bottom: 1rem;
         }
         .info-card h3 {
-            color: #667eea;
+            color: #1a4d2e;
             margin-top: 0;
         }
         
@@ -228,10 +308,49 @@ st.markdown("""
         
         /* File uploader */
         .uploadedFile {
-            border: 2px dashed #667eea !important;
+            border: 2px dashed #1a4d2e !important;
             border-radius: 8px;
         }
+        
+        /* Logo styling in topbar */
+        .topbar-logo {
+            height: 40px;
+            margin: 0 10px;
+            vertical-align: middle;
+            filter: brightness(0) invert(1);
+        }
+        .topbar-logos {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
     </style>
+""", unsafe_allow_html=True)
+
+# Load logos
+logo1_base64 = get_base64_image("assets/logo1.png")
+logo2_base64 = get_base64_image("assets/logo2.png")
+
+# Build logo HTML
+logos_html = ""
+if logo1_base64:
+    logos_html += f'<img src="data:image/png;base64,{logo1_base64}" class="topbar-logo" alt="Logo 1">'
+if logo2_base64:
+    logos_html += f'<img src="data:image/png;base64,{logo2_base64}" class="topbar-logo" alt="Logo 2">'
+
+# Fixed topbar
+st.markdown(f"""
+    <div class="fixed-topbar">
+        <div>
+            <h1>Motion Analyzer</h1>
+        </div>
+        <div>
+            <p>Parkinson's Assessment System</p>
+        </div>
+        <div class="topbar-logos">
+            {logos_html}
+        </div>
+    </div>
 """, unsafe_allow_html=True)
 
 # =========================
@@ -241,17 +360,11 @@ st.markdown("""
 # Header
 st.markdown("""
     <div class="main-header">
-        <h1>🏥 Motion Analyzer</h1>
-        <p>Análisis de movimiento para evaluación de enfermedades neuromotoras</p>
+        <h1>Análisis de Taloneo y Tobillos</h1>
+        <p>Herramienta de procesamiento y evaluación de enfermedades neuromotoras para movimientos de pie</p>
     </div>
 """, unsafe_allow_html=True)
 
-# Main content
-st.markdown("### 📊 Análisis de Datos de Movimiento")
-st.markdown("""
-Esta aplicación procesa datos de sensores IMU para detectar patrones de movimiento 
-asociados con bradicinesia y otras manifestaciones de Parkinson.
-""")
 
 # Exercise selection
 col1, col2 = st.columns([1, 3])
@@ -260,17 +373,21 @@ with col1:
                         help="Selecciona el tipo de ejercicio realizado por el paciente")
 
 # Preprocessing controls
-with st.expander("⚙️ Configuración de preprocesamiento"):
+with st.expander("Configuración de preprocesamiento"):
     trim_inactive = st.checkbox(
         "Recortar período inactivo inicial",
         value=True,
         help="Elimina automáticamente los primeros segundos sin movimiento antes de procesar"
     )
     if trim_inactive:
-        st.info("✂️ Se eliminarán los datos iniciales hasta detectar movimiento activo (detecta variación en magnitud, no solo gravedad estática)")
+        st.info("Se eliminarán los datos iniciales hasta detectar movimiento activo (detecta variación en magnitud, no solo gravedad estática)")
 
 # File upload
-st.markdown("### 📤 Cargar archivo de datos")
+st.markdown("### Cargar archivo de datos")
+st.markdown("""
+Esta aplicación procesa datos de sensores IMU para detectar patrones de movimiento 
+asociados con bradicinesia y otras manifestaciones de Parkinson.
+""")
 file = st.file_uploader("Sube archivo JSON con datos de movimiento", type="json")
 
 if file:
@@ -279,62 +396,96 @@ if file:
     with open(temp_path, "wb") as f:
         f.write(file.read())
 
-    # Process file with new modules
-    with st.spinner("🔄 Procesando datos..."):
-        results, viz_data = load_and_process_movement_data(temp_path, ejercicio, trim_inactive=trim_inactive)
-    left_acc_data, right_acc_data, left_peaks, right_peaks = viz_data
+    try:
+        # Load and validate JSON
+        with open(temp_path, "r") as f:
+            data = json.load(f)
+        
+        # Validate format
+        is_valid, error_message = validate_json_format(data)
+        
+        if not is_valid:
+            # Display styled error popup
+            st.markdown(f"""
+                <div style="
+                    background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+                    padding: 1.5rem;
+                    border-radius: 8px;
+                    margin: 1rem 0;
+                    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+                    border-left: 5px solid #fca5a5;
+                ">
+                    <h3 style="color: white; margin: 0 0 0.5rem 0;">
+                        Formato JSON No Reconocido
+                    </h3>
+                    <p style="color: white; font-size: 1rem; margin: 0;">
+                        {error_message}
+                    </p>
+                </div>
+            """, unsafe_allow_html=True)
+            st.stop()
+        
+        # Process file with new modules
+        with st.spinner("Procesando datos..."):
+            results, viz_data = load_and_process_movement_data(temp_path, ejercicio, trim_inactive=trim_inactive)
+        left_acc_data, right_acc_data, left_peaks, right_peaks = viz_data
+    
+    except json.JSONDecodeError as e:
+        st.markdown(f"""
+            <div style="
+                background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+                padding: 1.5rem;
+                border-radius: 8px;
+                margin: 1rem 0;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+                border-left: 5px solid #fca5a5;
+            ">
+                <h3 style="color: white; margin: 0 0 0.5rem 0;">
+                    Error de JSON
+                </h3>
+                <p style="color: white; font-size: 1rem; margin: 0;">
+                    El archivo no es un JSON válido. Verifica la sintaxis del archivo.
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
+        st.stop()
+    
+    except Exception as e:
+        st.markdown(f"""
+            <div style="
+                background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+                padding: 1.5rem;
+                border-radius: 8px;
+                margin: 1rem 0;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+                border-left: 5px solid #fca5a5;
+            ">
+                <h3 style="color: white; margin: 0 0 0.5rem 0;">
+                    Error de Procesamiento
+                </h3>
+                <p style="color: white; font-size: 1rem; margin: 0;">
+                    Ocurrió un error al procesar el archivo. Verifica que el formato sea correcto.
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
+        st.stop()
 
     # Display results
-    st.success("✅ Análisis completado")
+    st.success("Análisis completado")
     st.markdown("---")
-    st.markdown("### 📊 Resultados del análisis - Métricas principales")
-    
-    # Debug info for troubleshooting
-    with st.expander("🔍 Debug Info (click to expand)"):
-            st.write(f"**Left side:** {len(left_acc_data.z)} samples, {len(left_peaks)} peaks")
-            st.write(f"**Right side:** {len(right_acc_data.z)} samples, {len(right_peaks)} peaks")
-            st.write(f"**Active side:** {results['active_side']}")
-            
-            # Show trimming info if available
-            if results.get('left_trim_info'):
-                info = results['left_trim_info']
-                st.write(f"**✂️ Left trimmed:** {info['trimmed']} samples removed ({info['original']} → {info['remaining']})")
-                if info['trimmed'] == 0:
-                    st.warning("⚠️ No samples trimmed from left - variance threshold may not have been reached")
-            if results.get('right_trim_info'):
-                info = results['right_trim_info']
-                st.write(f"**✂️ Right trimmed:** {info['trimmed']} samples removed ({info['original']} → {info['remaining']})")
-                if info['trimmed'] == 0:
-                    st.warning("⚠️ No samples trimmed from right - variance threshold may not have been reached")
-            
-            if len(right_acc_data.z) > 0:
-                st.write(f"**Right Z-accel range:** {right_acc_data.z.min():.2f} to {right_acc_data.z.max():.2f} m/s²")
-                st.write(f"**Right Z-accel mean:** {right_acc_data.z.mean():.2f} m/s²")
-            
-            # Show first few timestamps to verify trimming
-            st.write(f"**First timestamp (left):** {left_acc_data.timestamps[0] if len(left_acc_data.timestamps) > 0 else 'N/A'}")
-            st.write(f"**First timestamp (right):** {right_acc_data.timestamps[0] if len(right_acc_data.timestamps) > 0 else 'N/A'}")
-            
-            # Show peak magnitudes to verify amplitude progression
-            active_peaks = left_peaks if results['active_side'] == 'LEFT' else right_peaks
-            active_mags = left_acc_data.magnitude if results['active_side'] == 'LEFT' else right_acc_data.magnitude
-            if len(active_peaks) > 0:
-                peak_mags = active_mags[active_peaks]
-                st.write(f"**Peak magnitudes:** {', '.join([f'{m:.2f}' for m in peak_mags[:10]])}")
-                st.write(f"**First peak:** {peak_mags[0]:.2f} m/s², **Last peak:** {peak_mags[-1]:.2f} m/s²")
+    st.markdown("### Métricas Principales")
     
     # Primary metrics (most relevant for study)
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3 = st.columns(3)
     col1.metric("Magnitud Promedio (m/s²)", f"{results['active_magnitude_mean']:.2f}")
     col2.metric("Tiempo Promedio por Repetición (ms)", f"{results['active_rep_time_mean']:.0f}")
     col3.metric("Variabilidad del Ritmo (ms)", f"{results['active_rep_time_std']:.0f}")
-    col4.metric("Amplitud Vertical Media (cm)", f"{results['active_vertical_amplitude_mean']:.2f}")
 
     # =========================
     # PARKINSON'S DIAGNOSIS
     # =========================
     st.markdown("---")
-    st.markdown("### 🩺 Diagnóstico Automatizado")
+    st.markdown("### Diagnóstico Automatizado")
     
     # Perform diagnosis
     diagnosis_system = ParkinsonDiagnosisSystem()
@@ -355,7 +506,7 @@ if file:
         <div style="background: {severity_color}; padding: 2rem; border-radius: 10px; text-align: center; margin: 1rem 0;">
             <h1 style="color: white; margin: 0; font-size: 3rem;">{diagnosis.severity_score}</h1>
             <h3 style="color: white; margin: 0.5rem 0 0 0;">{diagnosis.severity_label}</h3>
-            <p style="color: rgba(255,255,255,0.9); margin: 0.5rem 0 0 0;">Confianza: {diagnosis.confidence*100:.1f}%</p>
+            <p style="color: white; margin: 0.5rem 0 0 0;">Confianza: {diagnosis.confidence*100:.1f}%</p>
         </div>
     """, unsafe_allow_html=True)
     
@@ -363,26 +514,26 @@ if file:
     col_d1, col_d2 = st.columns(2)
     
     with col_d1:
-        st.markdown("#### 📊 Factores Contribuyentes")
+        st.markdown("#### Factores Contribuyentes")
         for factor, value in diagnosis.contributing_factors.items():
             factor_names = {
-                'decay_rate': '📉 Tasa de Reducción',
-                'amplitude_ratio': '⚖️ Ratio Amplitud',
-                'magnitude': '💪 Magnitud Media',
-                'rhythm_variability': '🎵 Variabilidad Ritmo',
-                'repetition_time': '⏱️ Tiempo Repetición',
-                'hesitations': '⏸️ Titubeos'
+                'decay_rate': 'Tasa de Reducción',
+                'amplitude_ratio': 'Ratio Amplitud',
+                'magnitude': 'Magnitud Media',
+                'rhythm_variability': 'Variabilidad Ritmo',
+                'repetition_time': 'Tiempo Repetición',
+                'hesitations': 'Titubeos'
             }
             st.write(f"**{factor_names.get(factor, factor)}:** {value}")
     
     with col_d2:
-        st.markdown("#### 📝 Notas Clínicas")
+        st.markdown("#### Notas Clínicas")
         st.info(diagnosis.clinical_notes)
     
     st.markdown("---")
 
     # Amplitude progression metrics (Parkinson's indicators)
-    st.markdown("#### Progresión de amplitud (indicadores de bradicinesia)")
+    st.markdown("#### Progresión de Amplitud (Indicadores de Bradicinesia)")
     col_a, col_b, col_c = st.columns(3)
     
     decay_rate = results['active_vertical_amplitude_decay']
@@ -399,11 +550,11 @@ if file:
                 help="> 1.1 = reducción significativa en segunda mitad, < 0.9 = aumento (warm-up normal)")
     
     col_c.metric("Interpretación",
-                "⚠️ Posible bradicinesia" if (decay_rate < -0.1 or ratio > 1.15) else "✓ Normal",
+                "Posible bradicinesia" if (decay_rate < -0.1 or ratio > 1.15) else "Normal",
                 help="Basado en regresión lineal de magnitudes de picos (decay) y comparación primera/segunda mitad (ratio)")
 
     # Secondary metrics
-    st.markdown("#### Métricas adicionales")
+    st.markdown("#### Métricas Adicionales")
     col5, col6, col7, col8 = st.columns(4)
     col5.metric("Magnitud Máxima (m/s²)", f"{results['active_magnitude_max']:.2f}")
     col6.metric("Fatiga (%)", f"{results['active_fatigue_index']*100:.1f}")
@@ -411,12 +562,12 @@ if file:
     col8.metric("Titubeos", f"{results['active_hesitations']}")
 
     # Show detailed results
-    st.markdown("#### 📄 Datos completos")
+    st.markdown("#### Datos Completos")
     with st.expander("Ver JSON completo"):
         st.json(results)
 
     # Create visualization - only show active side
-    st.markdown("### 📈 Visualización de datos")
+    st.markdown("### Visualización de Datos")
     
     # Determine which side to plot
     is_left_active = results['active_side'] == 'LEFT'
@@ -440,7 +591,7 @@ if file:
     # Add trimming annotation
     if active_trim_info and active_trim_info['trimmed'] > 0:
         trimmed = active_trim_info['trimmed']
-        ax1.text(0.02, 0.98, f'✂️ {trimmed} muestras recortadas', 
+        ax1.text(0.02, 0.98, f'{trimmed} muestras recortadas', 
                 transform=ax1.transAxes, fontsize=9, verticalalignment='top',
                 bbox=dict(boxstyle='round', facecolor='yellow', alpha=0.5))
     

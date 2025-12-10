@@ -25,9 +25,7 @@ def load_json_data(file_path: str) -> Dict[str, List[Dict[str, Any]]]:
                     "gyroscope": d.get("gyroscope", {})
                 })
         elif "izquierda" in data or "derecha" in data:
-            # New raw format
-            ACC_SCALE = 16384.0
-            GYRO_SCALE = 131.0
+            # Data already comes in g units and °/s, just convert g to m/s²
 
             for side, raw_key in [("LEFT", "izquierda"), ("RIGHT", "derecha")]:
                 if raw_key in data:
@@ -35,14 +33,14 @@ def load_json_data(file_path: str) -> Dict[str, List[Dict[str, Any]]]:
                         normalized[side].append({
                             "timestamp": d["millis"],
                             "accelerometer": {
-                                "x": (d["x"] / ACC_SCALE) * 9.81,
-                                "y": (d["y"] / ACC_SCALE) * 9.81,
-                                "z": (d["z"] / ACC_SCALE) * 9.81,
+                                "x": d["x"] * 9.81,  # Already in g, convert to m/s²
+                                "y": d["y"] * 9.81,
+                                "z": d["z"] * 9.81,
                             },
                             "gyroscope": {
-                                "x": d["a"] / GYRO_SCALE,
-                                "y": d["b"] / GYRO_SCALE,
-                                "z": d["g"] / GYRO_SCALE,
+                                "x": d["a"],  # Already in °/s
+                                "y": d["b"],
+                                "z": d["g"],
                             }
                         })
     return normalized
@@ -122,7 +120,7 @@ def process_all_files():
 def save_results(results: List[dict], output_path: str = 'resultados/resultados.csv'):
     """Save processing results to CSV file"""
     if not results:
-        print("⚠️ No hay resultados para guardar.")
+        print("[WARNING] No hay resultados para guardar.")
         return
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
@@ -133,7 +131,7 @@ def save_results(results: List[dict], output_path: str = 'resultados/resultados.
         writer.writeheader()
         writer.writerows(results)
     
-    print(f"✅ Resultados guardados en: {output_path}")
+    print(f"[SUCCESS] Resultados guardados en: {output_path}")
 
 if __name__ == '__main__':
     results = process_all_files()

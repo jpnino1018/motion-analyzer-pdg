@@ -52,8 +52,9 @@ Files come in two main JSON shapes; the code normalizes both into a standard str
   - Raw sensor format with `izquierda`/`derecha` arrays where counts are converted to physical units.
 
 - Normalization details (`preprocessing/normalization.py`):
-  - Converts raw accelerometer counts into m/s² using `ACC_SCALE = 16384.0` (g-counts) and multiplies by 9.81.
-  - Converts raw gyro counts using `GYRO_SCALE = 131.0` (°/s).
+  - **Input data already comes in gravitational units (g)** and gyroscope in °/s
+  - Converts accelerometer from g to m/s² by multiplying by 9.81
+  - Gyroscope data is already in °/s, no conversion needed
   - Returns a dict with `LEFT` and `RIGHT` lists; each element: `{timestamp, accelerometer: {x,y,z}, gyroscope: {x,y,z}}`.
 
 - **Automatic inactive period trimming** (`src/preprocessing/cleaners.py`):

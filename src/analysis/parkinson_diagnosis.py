@@ -35,9 +35,10 @@ class ParkinsonDiagnosisSystem:
         """Initialize diagnostic thresholds based on clinical research"""
         
         # Amplitude Decay Rate thresholds (m/s²/rep)
-        # Based on linear regression of peak magnitudes
+        # NEGATIVE values = reduction (bad), POSITIVE = improvement (good)
+        # For scoring: more negative = worse
         self.decay_thresholds = {
-            'normal': -0.03,      # Minimal to no decay
+            'normal': -0.03,      # Minimal to no decay (or positive = warm-up)
             'mild': -0.08,        # Slight progressive reduction
             'moderate': -0.15,    # Clear bradykinesia pattern
             'marked': -0.25,      # Severe progressive reduction
@@ -102,6 +103,49 @@ class ParkinsonDiagnosisSystem:
             'rep_time': 0.10,         # Less critical - speed
             'hesitations': 0.05       # Least critical - freezing episodes
         }
+    
+    def _score_decay_rate(self, value: float) -> Tuple[float, str]:
+        """
+        Special scoring for decay rate (handles negative values)
+        
+        Decay rate interpretation:
+        - Positive values (e.g., +0.05) = improvement/warm-up = GOOD (score 0)
+        - Near zero (-0.03 to 0) = stable = GOOD (score 0)
+        - Negative values = progressive reduction = BAD (score increases with magnitude)
+        
+        Args:
+            value: Decay rate in m/s²/rep (can be negative, zero, or positive)
+        
+        Returns:
+            (score, severity_label)
+        """
+        # Positive or near-zero = normal (healthy)
+        if value >= self.decay_thresholds['normal']:  # >= -0.03
+            return 0.0, 'normal'
+        
+        # Progressive worsening as value becomes more negative
+        elif value >= self.decay_thresholds['mild']:  # -0.03 to -0.08
+            range_span = self.decay_thresholds['mild'] - self.decay_thresholds['normal']
+            score = (value - self.decay_thresholds['normal']) / range_span
+            return score, 'mild'
+        
+        elif value >= self.decay_thresholds['moderate']:  # -0.08 to -0.15
+            range_span = self.decay_thresholds['moderate'] - self.decay_thresholds['mild']
+            score = 1.0 + ((value - self.decay_thresholds['mild']) / range_span)
+            return min(score, 2.0), 'moderate'
+        
+        elif value >= self.decay_thresholds['marked']:  # -0.15 to -0.25
+            range_span = self.decay_thresholds['marked'] - self.decay_thresholds['moderate']
+            score = 2.0 + ((value - self.decay_thresholds['moderate']) / range_span)
+            return min(score, 3.0), 'marked'
+        
+        elif value >= self.decay_thresholds['severe']:  # -0.25 to -0.40
+            range_span = self.decay_thresholds['severe'] - self.decay_thresholds['marked']
+            score = 3.0 + ((value - self.decay_thresholds['marked']) / range_span)
+            return min(score, 4.0), 'severe'
+        
+        else:  # < -0.40 = extreme
+            return 4.0, 'severe'
     
     def _score_feature(self, value: float, thresholds: dict, inverse: bool = False) -> Tuple[float, str]:
         """
@@ -176,7 +220,9 @@ class ParkinsonDiagnosisSystem:
             DiagnosisResult with severity score (0-4) and clinical interpretation
         """
         # Extract key metrics (use active side)
-        decay_rate = abs(metrics.get('active_vertical_amplitude_decay', 0))  # Use absolute value
+        # Keep decay_rate with original sign: negative = reduction (bad), positive = improvement (good)
+        decay_rate = metrics.get('active_vertical_amplitude_decay', 0)
+        
         amplitude_ratio = metrics.get('active_vertical_amplitude_ratio', 1.0)
         magnitude = metrics.get('active_magnitude_mean', 0)
         rhythm_std = metrics.get('active_rep_time_std', 0)
@@ -187,8 +233,8 @@ class ParkinsonDiagnosisSystem:
         # Normalize hesitations per 10 repetitions
         hesitations_normalized = (hesitations / max(num_peaks, 1)) * 10
         
-        # Score each feature
-        decay_score, decay_label = self._score_feature(decay_rate, self.decay_thresholds, inverse=False)
+        # Score each feature (use special method for decay_rate)
+        decay_score, decay_label = self._score_decay_rate(decay_rate)
         ratio_score, ratio_label = self._score_feature(amplitude_ratio, self.ratio_thresholds, inverse=False)
         magnitude_score, magnitude_label = self._score_feature(magnitude, self.magnitude_thresholds, inverse=True)
         rhythm_score, rhythm_label = self._score_feature(rhythm_std, self.rhythm_std_thresholds, inverse=False)
@@ -226,7 +272,7 @@ class ParkinsonDiagnosisSystem:
         # Lower variance = higher confidence
         confidence = max(0.5, min(1.0, 1.0 - (score_variance / 4.0)))
         
-        # Document contributing factors
+        # Document contributing factors (show original decay_rate with sign)
         contributing_factors = {
             'decay_rate': f"{decay_label} ({decay_rate:.3f} m/s²/rep)",
             'amplitude_ratio': f"{ratio_label} ({amplitude_ratio:.2f})",
@@ -258,12 +304,12 @@ class ParkinsonDiagnosisSystem:
         notes = []
         
         if score == 0:
-            notes.append("✓ Movimiento dentro de parámetros normales")
-            notes.append("✓ No se observan signos de bradicinesia")
-            notes.append("✓ Ritmo consistente y amplitud estable")
+            notes.append("Movimiento dentro de parámetros normales")
+            notes.append("No se observan signos de bradicinesia")
+            notes.append("Ritmo consistente y amplitud estable")
         
         elif score == 1:
-            notes.append("⚠️ Signos tempranos de deterioro motor")
+            notes.append("[LEVE] Signos tempranos de deterioro motor")
             if decay != 'normal':
                 notes.append(f"• Reducción leve de amplitud: {decay}")
             if ratio != 'normal':
@@ -273,7 +319,7 @@ class ParkinsonDiagnosisSystem:
             notes.append("→ Recomendación: Monitoreo periódico")
         
         elif score == 2:
-            notes.append("⚠️ Bradicinesia moderada detectada")
+            notes.append("[MODERADO] Bradicinesia moderada detectada")
             if decay in ['moderate', 'marked', 'severe']:
                 notes.append(f"• Reducción progresiva clara: {decay}")
             if ratio in ['moderate', 'marked', 'severe']:
@@ -283,7 +329,7 @@ class ParkinsonDiagnosisSystem:
             notes.append("→ Recomendación: Evaluación neurológica completa")
         
         elif score == 3:
-            notes.append("🔴 Bradicinesia marcada con compromiso funcional")
+            notes.append("[MARCADO] Bradicinesia marcada con compromiso funcional")
             notes.append(f"• Reducción severa de amplitud: {decay}")
             notes.append(f"• Fatiga extrema: {ratio}")
             if hesitation in ['marked', 'severe']:
@@ -291,7 +337,7 @@ class ParkinsonDiagnosisSystem:
             notes.append("→ Recomendación: Intervención terapéutica urgente")
         
         else:  # score == 4
-            notes.append("🔴 Compromiso motor severo")
+            notes.append("[SEVERO] Compromiso motor severo")
             notes.append("• Capacidad de movimiento extremadamente limitada")
             notes.append("• Bradykinesia extrema con posible congelamiento")
             notes.append("→ Recomendación: Ajuste inmediato de tratamiento")

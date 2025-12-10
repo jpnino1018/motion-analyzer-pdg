@@ -1,8 +1,62 @@
+# Data files
 *.json
 *.csv
 *.log
 *.tmp
+
+# Python
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+env/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Images (if you want to keep logos, remove *.png)
 *.png
+*.jpg
+*.jpeg
+*.gif
+
+# Archives
 *.zip
+*.tar.gz
+*.rar
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Project specific
+graficas/
+resultados/
+baselines/
+data/

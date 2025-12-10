@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 import pandas as pd
+
 from typing import List, Optional
 from src.preprocessing.signal_processing import AccelerometerData
 
