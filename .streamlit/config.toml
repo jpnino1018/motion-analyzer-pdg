@@ -4,3 +4,9 @@ backgroundColor="#0d3321"
 secondaryBackgroundColor="#1a4d2e"
 textColor="#ffffff"
 font="sans serif"
+
+[client]
+toolbarMode="minimal"
+
+[browser]
+gatherUsageStats=false
