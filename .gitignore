@@ -37,8 +37,7 @@ env/
 Thumbs.db
 desktop.ini
 
-# Images (if you want to keep logos, remove *.png)
-*.png
+# Images
 *.jpg
 *.jpeg
 *.gif
